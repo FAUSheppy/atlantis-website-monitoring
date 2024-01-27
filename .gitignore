@@ -1,0 +1,5 @@
+*.swp
+*.sqlite
+instance/
+dispatcher_passfile.txt
+__pycache__/
