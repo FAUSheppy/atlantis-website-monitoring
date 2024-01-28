@@ -2,9 +2,11 @@ import pika
 import argparse
 import checks
 import json
+import sys
 
 MASTER_HOST = None
 TOKEN = None
+FILE_OVERWRITE = None
 
 def callback(ch, method, properties, body):
 
@@ -36,11 +38,18 @@ if __name__ == "__main__":
     parser.add_argument("-h", "--queue-host", default="queue", help="Queue host to subscribe to")
     parser.add_argument("-q", "--queue", default="scheduled", help="Queue to consume")
     parser.add_argument("-t", "--work-submission-token", required=True, help="Main Server Submission Username")
+    parser.add_argument("-f", "--file-overwrite", help="Read and write to file instead")
 
     args = parser.parse_args()
 
     MASTER_HOST = args.master_host
     TOKEN = args.work_submission_token
+    FILE_OVERWRITE = args.file_overwrite
+
+    if FILE_OVERWRITE:
+        with open(FILE_OVERWRITE) as f:
+            callback(None, None, None, f.read())
+        sys.exit(0)
 
     # Establish connection to RabbitMQ server
     connection = pika.BlockingConnection(pika.ConnectionParameters(args.queue_host))
