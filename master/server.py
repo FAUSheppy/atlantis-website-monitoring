@@ -72,6 +72,14 @@ def submit_check():
     db.session.add(check_result_obj)
     db.session.commit()
 
+    # handoff notification #
+    # get last
+    # diff to last
+    message = "TODO"
+    payload = { "users": [target_user], "msg" : message }
+    r = requests.post(app.config["DISPATCH_SERVER"] + "/smart-send",
+                 json=payload, auth=app.config["DISPATCH_AUTH"])
+
     return "OK"
 
 @app.route("/schedule-check")
