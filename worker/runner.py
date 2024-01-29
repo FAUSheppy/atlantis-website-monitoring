@@ -23,8 +23,7 @@ def callback(ch, method, properties, body):
     check_spelling = d.get("check_spelling")
     
     if recursive:
-        results = checks.check_recursive(url, check_lighthouse, check_links,
-                                            check_spelling, extra_words, full_ignore)
+        results = checks.check_recursive(url, check_lighthouse, check_links, check_spelling, extra_words)
     else:
         results = checks.check_url(url, check_lighthouse, check_links, check_spelling, extra_words, full_ignore)
 

@@ -74,9 +74,23 @@ def check_spelling_f(body, extra_words=[], full_ignore=[]):
         print("===============================")
         print("'{}'".format(t_clean))
         for suggestion in suggestions:
-            if(not suggestion.distance == 0 and
-                not len(t_clean) <= 1):
-                print(suggestion)
+
+            if suggestion.distance == 0:
+                continue
+            elif len(t_clean) <= 1:
+                continue
+            
+            # skip very high distances - indicative of non-text being analyzed #
+            if (suggestion.distance/len(suggestion.term) > 0.5 or
+                (len(suggestion.term) > 20 and suggestion.distance/len(suggestion.term) > 0.2)):
+                continue
+
+            old_diff = re.sub(r'[\s.’\':,-]', '', t_clean)
+            new_diff = re.sub(r'[\s.’\':,-]', '', suggestion.term)
+            if old_diff == new_diff:
+                continue
+
+            print(suggestion)
 
 def check_links_f(url, body):
 
