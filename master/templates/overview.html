@@ -4,39 +4,31 @@
         {% include "navbar.html" %}
         <div class="container mt-4">
             <div class="row">
-                {% for status in status_list %}
-                <a href="/service-details?service={{ status.service}}"
+                {% for obj in url_checks %}
+                <a href="/service-details?service={{ obj.url }}"
                    class="col-md-5 m-3 p-2 border rounded overview-tile"
-                        {% if status.status == "OK"  %}
-                            style="background-color: lightgreen;"
-                        {% elif status.status == "WARNING"  %}
-                            style="background-color: orange;"
-                        {% elif status.status == "CRITICAL"  %}
+                        {% if obj.check_is_failed %}
                             style="background-color: #ff00005c;"
                         {% else %}
-                            style="background-color: magenta;"
+                            style="background-color: lightgreen;"
                         {% endif %}
                     >
-                    <div class="overview-tile-titel mb-2">{{ status.service }}</div>
+                    <div class="overview-tile-titel mb-2">{{ obj.url }}</div>
                     <div class="overview-tile-status {{ status.status.lower() }}">
-                        {{ status.status }}
+                        on: {{ obj.master_host }}
                     </div>
 
                     <div class="overview-tile-info-text">
                         <small>
-                        {% if status.info_text %}
-                        {{ status.info_text }}
-                        {% else %}
-                        No extra info
-                        {% endif %}
+                          -- NO TEXT --
                         </small>
                     </div>
 
                     <small class="overview-tile-date pt-2">
-                    {% if status.timestamp == 0 %}
+                    {% if obj.timestamp == 0 %}
                     Service never reported in
                     {% else %}
-                    {{ status.human_date() }}
+                    {{ obj.human_date() }}
                     {% endif %}
                     </small>
                 </a>

@@ -25,20 +25,17 @@
             {% endif %}
             <form class="mt-4" method="POST" action="/entry-form">
 
-                {{ form.service_hidden }}
-                {{ form.service.label }}
+                {{ form.uuid_hiddent }}
+                {{ form.url.label }}
 
                 {% if is_modification %}
-                {{ form.service(size=20, disabled=True) }}
+                {{ form.url(size=20, disabled=True) }}
                 {% else %}
-                {{ form.service(size=20) }}
+                {{ form.url(size=20) }}
                 {% endif %}
 
                 </br>
-                {{ form.timeout.label }}    {{ form.timeout() }}        </br>
-
-                </br>
-                {{ form.special_type.label }}    {{ form.special_type() }}        </br>
+                {{ form.recursive.label }}  {{ form.recursive() }}        </br>
 
                 {% if is_modification %}
                 <input class="form-button mt-4" type="submit" value="Send Modification">

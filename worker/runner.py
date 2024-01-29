@@ -15,14 +15,18 @@ def callback(ch, method, properties, body):
     url = d.get("url")
     recursive = d.get("url")
 
+    full_ignore = d.get("spelling_full_ignore_words")
+    extra_words = d.get("spelling_extra_words")
+
     check_lighthouse = d.get("check_lighthouse")
     check_links = d.get("check_links") or recursive
     check_spelling = d.get("check_spelling")
     
     if recursive:
-        results = checks.check_recursive(url, check_lighthouse, check_links, check_spelling)
+        results = checks.check_recursive(url, check_lighthouse, check_links,
+                                            check_spelling, extra_words, full_ignore)
     else:
-        results = checks.check_url(url, check_lighthouse, check_links, check_spelling)
+        results = checks.check_url(url, check_lighthouse, check_links, check_spelling, extra_words, full_ignore)
 
     for r in results:
         r.update({ "token" : TOKEN })

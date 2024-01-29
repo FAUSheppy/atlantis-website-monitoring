@@ -14,11 +14,29 @@ import sqlalchemy
 from sqlalchemy import Column, Integer, String, Boolean, or_, and_, asc, desc
 from flask_sqlalchemy import SQLAlchemy
 
+from wtforms import StringField, SubmitField, BooleanField, DecimalField, HiddenField, SelectField
+from wtforms.validators import DataRequired, Length
+
 app = flask.Flask("Atlantis Web-Checker")
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///sqlite.db"
 db = SQLAlchemy(app)
+
+class EntryForm(FlaskForm):
+
+    url = StringField("URL")
+    uuid_hidden = HiddenField("service_hidden")
+    recursive = BooleanField("recursive")
+
+class DictionaryWord(db.Model):
+
+    __tablename__ = "words"
+
+    owner = Column(String, primary_key=True)
+    word = Column(String, primary_key=True)
+    full_ignore = Column(Boolean) # ignore this word or pattern completely
+
 
 class URL(db.Model):
 
@@ -29,6 +47,7 @@ class URL(db.Model):
     base_url = Column(String)
     owner = Column(String)
 
+    check_is_failed = Column(Boolean)
     check_spelling = Column(Boolean)
     check_lighthouse = Column(Boolean)
     check_links = Column(Boolean)
@@ -36,7 +55,18 @@ class URL(db.Model):
 
     master_host = Column(String)
 
+    # token to authenticate submission #
+    token = Column(String)
+
+    # disabled #
+    disabled = Column(Boolean)
+
     settings = relationship("CheckResult", uselist=True)
+
+    def human_date(self):
+        dt = datetime.datetime.fromtimestamp(self.timestamp)
+        return dt.strftime("%d. %B %Y at %H:%M")
+
 
 class CheckResult(db.Model)
 
@@ -55,11 +85,11 @@ class CheckResult(db.Model)
 @app.route("/submit-check")
 def submit_check():
 
-    user = flask.request.headers.get("X-Forwarded-Preferred-Username")
     jdict = flask.request.json
-
     url_obj = db.session.query(URL).filter(owner=user, base_url=jdict.url).first()
 
+    if not "token" in jdict or url_obj.token != jdict.get("token"):
+        return ("Missing or wrong token in submission", 401)
 
     check_result_obj = CheckResult()
 
@@ -72,13 +102,21 @@ def submit_check():
     db.session.add(check_result_obj)
     db.session.commit()
 
+    # try to get last #
+    last = db.session.query(URL).filter(owner=user, base_url=jdict.url, not_(uuid==url_obj.uuid)).first()
+    message = None
+    if last:
+        if url_obj.check_is_failed != last.check_is_failed:
+            message = "Check status changed for {} (state={})".format(url_obj.url, url_obj.check_is_failed)
+
+    elif last.check_is_failed:
+        message = "Check for URL failed: {}".format(last.url)
+
     # handoff notification #
-    # get last
-    # diff to last
-    message = "TODO"
-    payload = { "users": [target_user], "msg" : message }
-    r = requests.post(app.config["DISPATCH_SERVER"] + "/smart-send",
-                 json=payload, auth=app.config["DISPATCH_AUTH"])
+    if message:
+        payload = { "users": [target_user], "msg" : message }
+        r = requests.post(app.config["DISPATCH_SERVER"] + "/smart-send",
+                             json=payload, auth=app.config["DISPATCH_AUTH"])
 
     return "OK"
 
@@ -101,16 +139,82 @@ def schedule_check():
 
     return "OK"
 
+def create_modify_entry(form, user):
+
+    token = secrets.token_urlsafe(16)
+
+    url = form.url.data
+    uuid = form.uuid_hidden.data or ""
+
+    # keep token if modification #
+    s_tmp = db.session.query(URL).filter(URL.uuid == uuid).first()
+    if s_tmp:
+        token = s_tmp.token
+        if not token:
+            raise AssertionError("WTF Service without Token {}".format(service_name))
+
+    url_obj = URL(uuid=uuid, owner=user, token=token, recursive=form.recursive.data)
+
+    db.session.merge(service)
+    db.session.commit() 
+
+@app.route("/create-modify", methods=["GET", "POST", "DELETE"])
+def form_endpoint():
+
+    user = flask.request.headers.get("X-Forwarded-Preferred-Username")
+
+    # check if is delete #
+    operation = flask.request.args.get("operation")
+    if operation and operation == "delete" :
+
+        uuid_delete = flask.request.args.get("uuid")
+        del_object = db.session.query(URL).filter(URL.uuid==uuid_delete,
+                                                Service.owner==user).first()
+
+        if not del_object:
+            return ("Failed to delete the requested service", 404)
+
+        db.session.delete(service_del_object)
+        db.session.commit()
+
+        return flask.redirect("/")
+
+    form = EntryForm()
+
+    # handle modification #
+    modify_uuid = flask.request.args.get("uuid")
+    if modify_uuid:
+        url_obj = db.session.query(URL).filter(URL.service == modify_uuid).first()
+        if url_obj and url_obj.owner == user:
+            form.url.default = url_obj.url
+            form.recursive.default = url_obj.recursive
+            form.uuid_hiddent.default = service.uuid
+            form.process()
+        else:
+            return ("Not a valid service to modify", 404)
+
+    if flask.request.method == "POST":
+        create_modify_entry(form, user)
+        service_name = form.url.data
+        return flask.redirect('/service-details?service={}'.format(service_name))
+    else:
+        return flask.render_template('add_modify_service.html', form=form,
+                    is_modification=bool(modify_service_name)
+
 @app.route("/")
 def index():
 
     user = flask.request.headers.get("X-Forwarded-Preferred-Username")
-    return flask.render_template("index.html", user=user, config=app.config)
-
+    url_checks = db.session.query(URL).filter(owner=user).all()
+    return flask.render_template("overview.html", user=user, config=app.config, url_checks=url_checks)
 
 def create_app():
-    pass
 
+    app.config["DISPATCH_SERVER"] = os.environ.get("DISPATCH_SERVER")
+    app.config["DISPATCH_AUTH"] = (os.environ["DISPATCH_AUTH_USER"], os.environ["DISPATCH_AUTH_PASSWORD"])
+
+    if not app.config["DISPATCH_SERVER"]:
+        print("Warning: env:DISPATCH_SERVER not configured!", file=sys.stderr)
 
 if __name__ == "__main__":
 
@@ -121,5 +225,8 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--interface", default="127.0.0.1", help="Interface to listen on")
     parser.add_argument("-p", "--port",      default="5000",      help="Port to listen on")
     parser.add_argument("--dispatch-server", required=True,       help="Dispatche Server")
+
+    with app.app_context():
+        create_app()
 
     app.run(host=args.interface, port=args.port, debug=True)
