@@ -36,7 +36,13 @@ def check_lighthouse_f(url):
         'speed-index'
     ]
     report = LighthouseRunner(url, form_factor='desktop', quiet=False, timings=TIMINGS).report
-    print(report.audits(0.5)['performance'].failed)
+
+    ret = {
+        "score": report.score,
+        "audits": json.dumps(report.audits())
+    }
+
+    return ret
 
 def check_spelling_f(body, extra_words=[], full_ignore=[]):
 
@@ -54,6 +60,7 @@ def check_spelling_f(body, extra_words=[], full_ignore=[]):
     soup = bs4.BeautifulSoup(body, 'html.parser')
     texts = [ child.get_text() for child in soup.find_all() if isinstance(child.string, bs4.NavigableString) ]
 
+    ret = dict()
     for t in texts:
 
         t_clean = _clean_whitespaces(t)
@@ -89,8 +96,11 @@ def check_spelling_f(body, extra_words=[], full_ignore=[]):
             new_diff = re.sub(r'[\s.’\':,-]', '', suggestion.term)
             if old_diff == new_diff:
                 continue
+            
+            ret.update({ t : suggestion })
+            break
 
-            print(suggestion)
+    return ret
 
 def check_links_f(url, body):
 
@@ -139,7 +149,7 @@ def _put_urls_for_body(body, urls_todo, urls_queued, current_url):
 
 def check_url_recursive(url, check_lighthouse, check_links, check_spelling, extra_words=[], full_ignore=[]):
 
-    results = []
+    results = dict()
     urls_queued = dict()
     urls_todo = queue.Queue()
     urls_todo.put(url)
@@ -148,10 +158,12 @@ def check_url_recursive(url, check_lighthouse, check_links, check_spelling, extr
 
         result, body = check_url(urls_todo.get(), check_lighthouse, check_links, check_spelling,
                                     extra_words, full_ignore)
-        results.append(result)
         _put_urls_for_body(body, urls_todo, urls_queued, current_url=url)
 
-    return result
+        # add to results #
+        results.update({ "url" : result })
+
+    return results
 
 def check_url(url, check_lighthouse, check_links, check_spelling, external_only=False,
                 extra_words=[], full_ignore=[]):

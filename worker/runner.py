@@ -25,11 +25,12 @@ def callback(ch, method, properties, body):
     if recursive:
         results = checks.check_recursive(url, check_lighthouse, check_links, check_spelling, extra_words)
     else:
-        results = checks.check_url(url, check_lighthouse, check_links, check_spelling, extra_words, full_ignore)
+        r, body = checks.check_url(url, check_lighthouse, check_links, check_spelling, extra_words, full_ignore)
+        results = { url : r }
 
-    for r in results:
-        r.update({ "token" : TOKEN })
-        requests.post("{}{}".format(MASTER_HOST, "/submit-check"), json=r)
+    # submitt results back to master #
+    results.update({ "token" : TOKEN })
+    requests.post("{}{}".format(MASTER_HOST, "/submit-check"), json=results)
 
 
 if __name__ == "__main__":
