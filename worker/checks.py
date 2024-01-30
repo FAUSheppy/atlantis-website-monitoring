@@ -109,15 +109,20 @@ def check_links_f(url, body):
     urls_todo = queue.Queue()
     _put_urls_for_body(body, urls_todo, urls_queued, current_url=url)
 
+    failed_count = 0
     while not urls_todo.empty():
        
         cur = urls_todo.get()
         print(cur)
         time.sleep(1)
         result, body = check_url(cur, False, False, False)
-        results.append({ cur: result["base_status"] in [301, 302, 200, 204] })
+        failed = result["base_status"] in [301, 302, 200, 204]
+        results.append({ cur : failed })
+        
+        if failed:
+            failed_count += 1
 
-    return result
+    return { "failed" : failed_count, "results" : results }
 
 def _put_urls_for_body(body, urls_todo, urls_queued, current_url):
     '''Update the link queue with new links from a give body of HTML'''

@@ -47,7 +47,6 @@ class URL(db.Model):
     base_url = Column(String)
     owner = Column(String)
 
-    check_is_failed = Column(Boolean)
     check_spelling = Column(Boolean)
     check_lighthouse = Column(Boolean)
     check_links = Column(Boolean)
@@ -76,49 +75,73 @@ class CheckResult(db.Model)
     base_url = Column(String, ForeignKey("url.base_url"))
 
     url = Column(String)
-
-    timstamp = Column(String)
-    lighthouse = Column(String)
     base_check = Column(String)
-    check_links = Column(String)
+    timstamp = Column(String)
+
+    lighthouse_score = Column(String)
+    lighthouse_results = Column(String)
+
+    links_results = Column(String)
+    links_failed_count = Column(Integer)
 
 @app.route("/submit-check")
 def submit_check():
+    '''Receive a json dict of url : check_results from a worker'''
 
     jdict = flask.request.json
-    url_obj = db.session.query(URL).filter(owner=user, base_url=jdict.url).first()
+    url_obj = db.session.query(URL).filter(owner=user, base_url=jdict["url"]).first()
 
     if not "token" in jdict or url_obj.token != jdict.get("token"):
         return ("Missing or wrong token in submission", 401)
 
-    check_result_obj = CheckResult()
+    for key, value, in jdict.items():
 
-    check_result_obj.url = jdict.url
-    check_result_obj.timstamp = datetime.datetime.now().isoformat()
-    check_result_obj.lighthouse = jdict.lighthouse
-    check_result_obj.base_check = jdict.base_check 
-    check_result_obj.check_links = jdict.check_links
+        check_failed_message = ""
 
-    db.session.add(check_result_obj)
-    db.session.commit()
+        # base information #
+        check_result_obj = CheckResult()
+        check_result_obj.url = jdict.get("url")
+        check_result_obj.timstamp = datetime.datetime.now().isoformat()
 
-    # try to get last #
-    last = db.session.query(URL).filter(owner=user, base_url=jdict.url, not_(uuid==url_obj.uuid)).first()
-    message = None
-    if last:
-        if url_obj.check_is_failed != last.check_is_failed:
-            message = "Check status changed for {} (state={})".format(url_obj.url, url_obj.check_is_failed)
+        # base check #
+        check_result_obj.base_check = jdict["base_status"]
+        if check_result_obj.base_check:
+            check_failed_message += "ERROR: URL unreachable:\n{}\n".format(check_result_obj.url)
 
-    elif last.check_is_failed:
-        message = "Check for URL failed: {}".format(last.url)
+        if "lighthouse" in value:
+            check_result_obj.lighthouse_audits = value.get("lighthouse").get("results")
+            check_result_obj.lighthouse_score = value.get("lighthouse").get("score")
 
-    # handoff notification #
-    if message:
-        payload = { "users": [target_user], "msg" : message }
-        r = requests.post(app.config["DISPATCH_SERVER"] + "/smart-send",
-                             json=payload, auth=app.config["DISPATCH_AUTH"])
+            # lighthouse problem #
+            if check_result_obj.lighthouse_score < 0.75:
+                check_failed_message += "Warning: Lighthouse score degraded\n{}\n".format(check_result_obj.url)
 
-    return "OK"
+        if "links" in value:
+            check_result_obj.links_failed_count = jdict.get("links")["failed"]
+            check_result_obj.links_results = jdict.get("links")["results"]
+
+            # dead links problem #
+            if check_result_obj.links_results > 0:
+                check_failed_message += "Warning: Dead Links on Website ->\n"
+                check_failed_message += "\n".join(check_result_obj.links_results)
+
+        # overall fail ? #
+        check_result_obj.failed = bool(check_failed_message)
+
+        # add and commit #
+        db.session.add(check_result_obj)
+        db.session.commit()
+
+        # try to get last #
+        last_q = db.session.query(CheckResult).filter(owner=user, base_url=jdict.url, not_(uuid==url_obj.uuid))
+        last = last_q.first()
+
+        if not last.failed and check_result_obj.failed:
+            payload = { "users": [target_user], "msg" : message }
+            r = requests.post(app.config["DISPATCH_SERVER"] + "/smart-send",
+                                 json=payload, auth=app.config["DISPATCH_AUTH"])
+
+        return "OK"
 
 @app.route("/schedule-check")
 def schedule_check():
