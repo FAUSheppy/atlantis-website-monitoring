@@ -10,10 +10,14 @@ import json
 import datetime
 import pika
 
+import uuid
+
 import sqlalchemy
-from sqlalchemy import Column, Integer, String, Boolean, or_, and_, asc, desc
+from sqlalchemy import Column, Integer, String, Boolean, or_, and_, asc, desc, not_, ForeignKey
+from sqlalchemy.orm import relationship
 from flask_sqlalchemy import SQLAlchemy
 
+from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, BooleanField, DecimalField, HiddenField, SelectField
 from wtforms.validators import DataRequired, Length
 
@@ -42,7 +46,7 @@ class URL(db.Model):
 
     __tablename__ = "url"
 
-    uuid = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    uuid = Column(String, primary_key=True, default=str(uuid.uuid4))
 
     base_url = Column(String)
     owner = Column(String)
@@ -67,11 +71,11 @@ class URL(db.Model):
         return dt.strftime("%d. %B %Y at %H:%M")
 
 
-class CheckResult(db.Model)
+class CheckResult(db.Model):
 
     __tablename__ = "results"
 
-    uuid = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    uuid = Column(String, primary_key=True, default=str(uuid.uuid4))
     base_url = Column(String, ForeignKey("url.base_url"))
 
     url = Column(String)
@@ -133,10 +137,11 @@ def submit_check():
         db.session.commit()
 
         # try to get last #
-        last_q = db.session.query(CheckResult).filter(owner=user, base_url=jdict.url, not_(uuid==url_obj.uuid))
+        last_q = db.session.query(CheckResult).filter(
+                        and_(owner==user, base_url==jdict.url, not_(uuid==url_obj.uuid)))
         last = last_q.first()
 
-        if not last.failed and check_result_obj.failed:
+        if not last.failed and check_result_obj.failed and app.config.get("DISPATCH_SERVER"):
             payload = { "users": [target_user], "msg" : message }
             r = requests.post(app.config["DISPATCH_SERVER"] + "/smart-send",
                                  json=payload, auth=app.config["DISPATCH_AUTH"])
@@ -146,15 +151,18 @@ def submit_check():
 @app.route("/schedule-check")
 def schedule_check():
 
-    user = flask.request.headers.get("X-Forwarded-Preferred-Username")
+    user = flask.request.headers.get("X-Forwarded-Preferred-Username") or "anonymous"
     url = flask.request.args.get("url")
 
     if not url:
         return ("Missing URL", 405)
 
-    url_obj = db.session.query(URL).filter(owner=user, base_url=url).first()
+    url_obj = db.session.query(URL).filter(and_(URL.owner==user, URL.base_url==url)).first()
 
-    connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+    if not url_obj:
+        return ("Combination of {} and {} does not exist".format(url, user), 404)
+
+    connection = pika.BlockingConnection(pika.ConnectionParameters(app.config["QUEUE_SERVER"]))
     channel = connection.channel()
     channel.queue_declare(queue='scheduled')
     channel.basic_publish(exchange='', routing_key='scheduled', body=url_obj.url)
@@ -184,7 +192,7 @@ def create_modify_entry(form, user):
 @app.route("/create-modify", methods=["GET", "POST", "DELETE"])
 def form_endpoint():
 
-    user = flask.request.headers.get("X-Forwarded-Preferred-Username")
+    user = flask.request.headers.get("X-Forwarded-Preferred-Username") or "anonymous"
 
     # check if is delete #
     operation = flask.request.args.get("operation")
@@ -222,22 +230,34 @@ def form_endpoint():
         return flask.redirect('/service-details?service={}'.format(service_name))
     else:
         return flask.render_template('add_modify_service.html', form=form,
-                    is_modification=bool(modify_service_name)
+                    is_modification=bool(modify_service_name))
 
 @app.route("/")
 def index():
 
-    user = flask.request.headers.get("X-Forwarded-Preferred-Username")
+    user = flask.request.headers.get("X-Forwarded-Preferred-Username") or "anonymous"
     url_checks = db.session.query(URL).filter(owner=user).all()
     return flask.render_template("overview.html", user=user, config=app.config, url_checks=url_checks)
 
 def create_app():
 
-    app.config["DISPATCH_SERVER"] = os.environ.get("DISPATCH_SERVER")
-    app.config["DISPATCH_AUTH"] = (os.environ["DISPATCH_AUTH_USER"], os.environ["DISPATCH_AUTH_PASSWORD"])
+    # prepare database #
+    db.create_all()
 
+    # set dispatch server info #
+    app.config["DISPATCH_SERVER"] = os.environ.get("DISPATCH_SERVER")
     if not app.config["DISPATCH_SERVER"]:
         print("Warning: env:DISPATCH_SERVER not configured!", file=sys.stderr)
+    else:
+        app.config["DISPATCH_AUTH"] = (os.environ["DISPATCH_AUTH_USER"], os.environ["DISPATCH_AUTH_PASSWORD"])
+
+    # set rabbitmq connection #
+    app.config["QUEUE_SERVER"] = os.environ.get("QUEUE_SERVER")
+
+    # check pika connection #
+    test_c = pika.BlockingConnection(pika.ConnectionParameters(app.config["QUEUE_SERVER"]))
+    assert(test_c.is_open)
+    test_c.close()
 
 if __name__ == "__main__":
 
@@ -247,7 +267,10 @@ if __name__ == "__main__":
     # general parameters #
     parser.add_argument("-i", "--interface", default="127.0.0.1", help="Interface to listen on")
     parser.add_argument("-p", "--port",      default="5000",      help="Port to listen on")
-    parser.add_argument("--dispatch-server", required=True,       help="Dispatche Server")
+    parser.add_argument("-q", "--queue",     default="localhost", help="Pika queue target")
+
+    args = parser.parse_args()
+    os.environ["QUEUE_SERVER"] = args.queue
 
     with app.app_context():
         create_app()
