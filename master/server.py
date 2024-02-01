@@ -47,7 +47,7 @@ class URL(db.Model):
 
     __tablename__ = "url"
 
-    uuid = Column(String, primary_key=True, default=str(uuid.uuid4))
+    uuid = Column(String, primary_key=True)
 
     base_url = Column(String)
     owner = Column(String)
@@ -76,8 +76,8 @@ class CheckResult(db.Model):
 
     __tablename__ = "results"
 
-    uuid = Column(String, primary_key=True, default=str(uuid.uuid4))
-    base_url = Column(String, ForeignKey("url.base_url"))
+    uuid = Column(String, primary_key=True)
+    parent = Column(String, ForeignKey("url.base_url"))
 
     url = Column(String)
     base_check = Column(String)
@@ -89,41 +89,47 @@ class CheckResult(db.Model):
     links_results = Column(String)
     links_failed_count = Column(Integer)
 
-@app.route("/submit-check")
+    check_failed_message = Column(String)
+
+@app.route("/submit-check", methods=["POST"])
 def submit_check():
     '''Receive a json dict of url : check_results from a worker'''
 
     jdict = flask.request.json
-    url_obj = db.session.query(URL).filter(owner=user, base_url=jdict["url"]).first()
+    url_obj = db.session.query(URL).filter(URL.base_url==jdict["url"]).first()
+
+    print(json.dumps(jdict, indent=2))
 
     if not "token" in jdict or url_obj.token != jdict.get("token"):
         return ("Missing or wrong token in submission", 401)
 
-    for key, value, in jdict.items():
+    for url, results, in jdict["check"].items():
 
         check_failed_message = ""
 
         # base information #
         check_result_obj = CheckResult()
-        check_result_obj.url = jdict.get("url")
+        check_result_obj.uuid = str(uuid.uuid4())
+        check_result_obj.url = url
+        check_result_obj.parent = url_obj.uuid
         check_result_obj.timstamp = datetime.datetime.now().isoformat()
 
         # base check #
-        check_result_obj.base_check = jdict["base_status"]
-        if check_result_obj.base_check:
+        check_result_obj.base_check = results["base_status"]
+        if not check_result_obj.base_check:
             check_failed_message += "ERROR: URL unreachable:\n{}\n".format(check_result_obj.url)
 
-        if "lighthouse" in value:
-            check_result_obj.lighthouse_audits = value.get("lighthouse").get("results")
-            check_result_obj.lighthouse_score = value.get("lighthouse").get("score")
+        if "lighthouse" in results:
+            check_result_obj.lighthouse_audits = results.get("lighthouse").get("results")
+            check_result_obj.lighthouse_score = results.get("lighthouse").get("score")
 
             # lighthouse problem #
             if check_result_obj.lighthouse_score < 0.75:
                 check_failed_message += "Warning: Lighthouse score degraded\n{}\n".format(check_result_obj.url)
 
-        if "links" in value:
-            check_result_obj.links_failed_count = jdict.get("links")["failed"]
-            check_result_obj.links_results = jdict.get("links")["results"]
+        if "links" in results:
+            check_result_obj.links_failed_count = results.get("links")["failed"]
+            check_result_obj.links_results = results.get("links")["results"]
 
             # dead links problem #
             if check_result_obj.links_results > 0:
@@ -131,7 +137,8 @@ def submit_check():
                 check_failed_message += "\n".join(check_result_obj.links_results)
 
         # overall fail ? #
-        check_result_obj.failed = bool(check_failed_message)
+        check_result_obj.base_check = bool(check_failed_message)
+        check_result_obj.check_failed_message = check_failed_message
 
         # add and commit #
         db.session.add(check_result_obj)
@@ -139,10 +146,13 @@ def submit_check():
 
         # try to get last #
         last_q = db.session.query(CheckResult).filter(
-                        and_(owner==user, base_url==jdict.url, not_(uuid==url_obj.uuid)))
+                    and_(CheckResult.parent==URL.uuid, CheckResult.url==jdict["url"], not_(CheckResult.uuid==check_result_obj.uuid)))
         last = last_q.first()
 
-        if not last.failed and check_result_obj.failed and app.config.get("DISPATCH_SERVER"):
+        # dispatch configured, and based check failed + either no last result or last result success #
+        if(((not last and not check_result_obj.base_check)
+                or (last and last.base_check != check_result_obj.base_check))
+                and app.config.get("DISPATCH_SERVER")):
             payload = { "users": [target_user], "msg" : message }
             r = requests.post(app.config["DISPATCH_SERVER"] + "/smart-send",
                                  json=payload, auth=app.config["DISPATCH_AUTH"])
@@ -163,10 +173,21 @@ def schedule_check():
     if not url_obj:
         return ("Combination of {} and {} does not exist".format(url, user), 404)
 
+    push_dict = {
+        "url" : url_obj.base_url,
+        "spelling_full_ignore_words" : "",
+        "spelling_extra_words" : "",
+        "check_spelling" : url_obj.check_spelling,
+        "check_lighthouse" : url_obj.check_lighthouse,
+        "check_links"  : url_obj.check_links,
+        "recursive" : url_obj.recursive,
+        "token" : url_obj.token,
+    }
+
     connection = pika.BlockingConnection(pika.ConnectionParameters(app.config["QUEUE_SERVER"]))
     channel = connection.channel()
     channel.queue_declare(queue='scheduled')
-    channel.basic_publish(exchange='', routing_key='scheduled', body=url_obj.base_url)
+    channel.basic_publish(exchange='', routing_key='scheduled', body=json.dumps(push_dict))
     connection.close()
 
     return "OK"
@@ -277,8 +298,8 @@ def create_app():
     # set secret for CSRF #
     app.config["SECRET_KEY"] = secrets.token_urlsafe(64)
 
-    csrf = CSRFProtect()
-    csrf.init_app(app)
+    #csrf = CSRFProtect()
+    #csrf.init_app(app)
 
 if __name__ == "__main__":
 

@@ -11,6 +11,9 @@ import dateutil.parser
 
 DEFAULT_FREQUENCY = 100
 
+def _check_base_status(status_code):
+    return status_code in [301, 302, 200, 204]
+
 def _clean_whitespaces(text):
 
     # collapse #
@@ -116,7 +119,7 @@ def check_links_f(url, body):
         print(cur)
         time.sleep(1)
         result, body = check_url(cur, False, False, False)
-        failed = result["base_status"] in [301, 302, 200, 204]
+        failed = _check_base_status(result["base_status"])
         results.append({ cur : failed })
         
         if failed:
@@ -176,7 +179,7 @@ def check_url(url, check_lighthouse, check_links, check_spelling, external_only=
     result_dict = dict()
 
     status, body = check_website_reachable(url)
-    result_dict.update({"base_status" : status })
+    result_dict.update({"base_status" : _check_base_status(status) })
 
     if check_lighthouse:
         result_dict.update({"lighthouse" : check_lighthouse_f(url)})
