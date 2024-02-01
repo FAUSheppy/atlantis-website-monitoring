@@ -29,7 +29,12 @@ def _clean_whitespaces(text):
 
 def check_website_reachable(url):
 
-    r = requests.get(url)
+    try:
+        r = requests.get(url)
+    except requests.exceptions.SSLError:
+        return (-1, "SSL Error")
+    except requests.exceptions.ConnectionError:
+        return (-2, "Could not resolve DNS")
 
     return (r.status_code, r.content)
 
