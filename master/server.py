@@ -9,8 +9,9 @@ import sys
 import json
 import datetime
 import pika
-
+import secrets
 import uuid
+from flask_wtf import CSRFProtect
 
 import sqlalchemy
 from sqlalchemy import Column, Integer, String, Boolean, or_, and_, asc, desc, not_, ForeignKey
@@ -19,7 +20,7 @@ from flask_sqlalchemy import SQLAlchemy
 
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, BooleanField, DecimalField, HiddenField, SelectField
-from wtforms.validators import DataRequired, Length
+from wtforms.validators import DataRequired, Length, URL
 
 app = flask.Flask("Atlantis Web-Checker")
 
@@ -29,7 +30,7 @@ db = SQLAlchemy(app)
 
 class EntryForm(FlaskForm):
 
-    url = StringField("URL")
+    url = StringField("URL", validators=[URL()])
     uuid_hidden = HiddenField("service_hidden")
     recursive = BooleanField("recursive")
 
@@ -165,7 +166,7 @@ def schedule_check():
     connection = pika.BlockingConnection(pika.ConnectionParameters(app.config["QUEUE_SERVER"]))
     channel = connection.channel()
     channel.queue_declare(queue='scheduled')
-    channel.basic_publish(exchange='', routing_key='scheduled', body=url_obj.url)
+    channel.basic_publish(exchange='', routing_key='scheduled', body=url_obj.base_url)
     connection.close()
 
     return "OK"
@@ -174,38 +175,51 @@ def create_modify_entry(form, user):
 
     token = secrets.token_urlsafe(16)
 
+    print(form.url.__dict__)
     url = form.url.data
-    uuid = form.uuid_hidden.data or ""
+    uuid_hidden = form.uuid_hidden.data or str(uuid.uuid4())
+
+    if not uuid_hidden or not url:
+        raise AssertionError("Missing URL [{}] or uuid_hidden [{}] - oO?".format(url, uuid_hidden))
 
     # keep token if modification #
-    s_tmp = db.session.query(URL).filter(URL.uuid == uuid).first()
-    if s_tmp:
-        token = s_tmp.token
-        if not token:
-            raise AssertionError("WTF Service without Token {}".format(service_name))
+    s_tmp = db.session.query(URL).filter(URL.uuid==uuid_hidden).first()
+    url_obj = URL(uuid=uuid_hidden, base_url=url, owner=user, token=token, recursive=form.recursive.data)
 
-    url_obj = URL(uuid=uuid, owner=user, token=token, recursive=form.recursive.data)
-
-    db.session.merge(service)
+    db.session.merge(url_obj)
     db.session.commit() 
+
+@app.route("/check-details")
+def check_details():
+
+    user = flask.request.headers.get("X-Forwarded-Preferred-Username") or "anonymous"
+    url = flask.request.args.get("url")
+
+    if not url:
+        return ("Missing '?url=...' argument", 404)
+
+    # check url #
+    url_obj = db.session.query(URL).filter(and_(URL.owner==user, URL.base_url==url)).first()
+    if not url_obj:
+        return ("Combination of {} and {} does not exist".format(url, user), 404)
+
+    return flask.render_template("service_info.html", url_check_obj=url_obj)
 
 @app.route("/create-modify", methods=["GET", "POST", "DELETE"])
 def form_endpoint():
 
     user = flask.request.headers.get("X-Forwarded-Preferred-Username") or "anonymous"
+    url = flask.request.args.get("url")
+    url_obj = del_object = db.session.query(URL).filter(and_(URL.base_url==url, URL.owner==user)).first()
 
     # check if is delete #
     operation = flask.request.args.get("operation")
     if operation and operation == "delete" :
 
-        uuid_delete = flask.request.args.get("uuid")
-        del_object = db.session.query(URL).filter(URL.uuid==uuid_delete,
-                                                Service.owner==user).first()
-
-        if not del_object:
+        if not url_obj:
             return ("Failed to delete the requested service", 404)
 
-        db.session.delete(service_del_object)
+        db.session.delete(url_obj)
         db.session.commit()
 
         return flask.redirect("/")
@@ -213,30 +227,31 @@ def form_endpoint():
     form = EntryForm()
 
     # handle modification #
-    modify_uuid = flask.request.args.get("uuid")
-    if modify_uuid:
-        url_obj = db.session.query(URL).filter(URL.service == modify_uuid).first()
-        if url_obj and url_obj.owner == user:
-            form.url.default = url_obj.url
-            form.recursive.default = url_obj.recursive
-            form.uuid_hiddent.default = service.uuid
-            form.process()
-        else:
-            return ("Not a valid service to modify", 404)
+    if url_obj: # TODO fix this use UUID for mod not URL (create double)
+        form.url.default = url_obj.base_url
+        form.recursive.default = url_obj.recursive
+        form.uuid_hidden.default = url_obj.uuid
+        form.process()
+    elif url:
+        return ("Not a valid service to modify", 404)
 
     if flask.request.method == "POST":
-        create_modify_entry(form, user)
-        service_name = form.url.data
-        return flask.redirect('/service-details?service={}'.format(service_name))
+        if form.validate():
+            create_modify_entry(form, user)
+            service_name = form.url.data
+            return flask.redirect('/check-details?url={}'.format(service_name))
+        else:
+            print(form.url.data)
+            return flask.render_template('add_modify_form.html', form=form)
     else:
-        return flask.render_template('add_modify_service.html', form=form,
-                    is_modification=bool(modify_service_name))
+        return flask.render_template('add_modify_form.html', form=form)
 
 @app.route("/")
+@app.route("/overview")
 def index():
 
     user = flask.request.headers.get("X-Forwarded-Preferred-Username") or "anonymous"
-    url_checks = db.session.query(URL).filter(owner=user).all()
+    url_checks = db.session.query(URL).filter(URL.owner==user).all()
     return flask.render_template("overview.html", user=user, config=app.config, url_checks=url_checks)
 
 def create_app():
@@ -258,6 +273,12 @@ def create_app():
     test_c = pika.BlockingConnection(pika.ConnectionParameters(app.config["QUEUE_SERVER"]))
     assert(test_c.is_open)
     test_c.close()
+
+    # set secret for CSRF #
+    app.config["SECRET_KEY"] = secrets.token_urlsafe(64)
+
+    csrf = CSRFProtect()
+    csrf.init_app(app)
 
 if __name__ == "__main__":
 

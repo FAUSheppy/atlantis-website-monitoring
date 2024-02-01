@@ -28,13 +28,13 @@
                 }
             </script>
 
-            <h2 class="service-name">Service: {{ service.url }}</h2>
+            <h2 class="service-name">Check: {{ url_check_obj.base_url }}</h2>
 
             <!-- buttons -->
             <a class="service-info-button mt-3" style="background-color: orange;"
-                href="/entry-form?service={{ service.service }}">Modify</a>
+                href="/create-modify?url={{ url_check_obj.base_url }}">Modify</a>
             <a class="service-info-button mt-3" style="background-color: red;"
-                href="/entry-form?service={{ service.service }}&operation=delete">Delete</a>
+                href="/create-modify?url={{ url_check_obj.base_url }}&operation=delete">Delete</a>
 
             <button style="clear: both;" class="last-status hover mr-3" onclick="submit_manual()">
                 <p style="color: darkred;">Set disabled state TODO</p>
@@ -42,13 +42,7 @@
 
             <!-- last status -->
             <div class="last-status">
-                {% if status_list | length > 0 %}
-                <p class="{{ status_list[0].status }}">
-                    {{ status_list[0].check_is_failed }} submitted on {{ status_list[0].human_date() }}
-                </p>
-                {% else %}
-                <p style="color: darkred;">No status for this service submitted</p>
-                {% endif %}
+                <p style="color: darkred;">No status for this site submitted</p>
             </div>
 
             <!-- status list -->

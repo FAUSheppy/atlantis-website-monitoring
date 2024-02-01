@@ -1,0 +1,8 @@
+- push correct data to queue
+- have a 3rd container schedule checks
+- display check results based on latest checkresult
+
+- display lighthouse base info
+- display links base info
+- display subpages info
+- display spelling info

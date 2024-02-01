@@ -5,7 +5,7 @@
         <div class="container mt-4">
             <div class="row">
                 {% for obj in url_checks %}
-                <a href="/service-details?service={{ obj.url }}"
+                <a href="/check-details?url={{ obj.base_url }}"
                    class="col-md-5 m-3 p-2 border rounded overview-tile"
                         {% if obj.check_is_failed %}
                             style="background-color: #ff00005c;"
@@ -14,7 +14,7 @@
                         {% endif %}
                     >
                     <div class="overview-tile-titel mb-2">{{ obj.url }}</div>
-                    <div class="overview-tile-status {{ status.status.lower() }}">
+                    <div class="overview-tile-status {{ TODO }}">
                         on: {{ obj.master_host }}
                     </div>
 
@@ -25,7 +25,7 @@
                     </div>
 
                     <small class="overview-tile-date pt-2">
-                    {% if obj.timestamp == 0 %}
+                    {% if 0 == 0 %}
                     Service never reported in
                     {% else %}
                     {{ obj.human_date() }}

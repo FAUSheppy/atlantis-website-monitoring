@@ -9,23 +9,24 @@
     <div class="container">
         <h1 style="margin: auto; width: fit-content;" class="mt-5">
             {% if is_modification %}
-                Modify Service
+                Modify Check
             {% else %}
-                Create a new Service
+                Create a new Check
             {% endif %}
         </h1>
         <div class="form-container">
             <hr style="mt-3">
-            {% if form.service.errors %}
-                <ul class="mt-4 errors">
-                {% for error in form.service.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-                </ul>
+            <div class="errors w-100" style="color: red !important;">
+            {% if form.errors %}
+                {{ form.errors }}
             {% endif %}
-            <form class="mt-4" method="POST" action="/entry-form">
+            </div>
+            <form class="mt-4" method="POST" action="/create-modify">
 
-                {{ form.uuid_hiddent }}
+
+                {{ form.hidden_tag() }}
+                    {{ form.csrf_token }}
+                {{ form.uuid_hidden }}
                 {{ form.url.label }}
 
                 {% if is_modification %}
