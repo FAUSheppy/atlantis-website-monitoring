@@ -47,9 +47,11 @@ def callback(ch, method, properties, body):
     check_spelling = d.get("check_spelling")
     
     if recursive:
-        results = checks.check_recursive(url, check_lighthouse, check_links, check_spelling, extra_words)
+        results = checks.check_url_recursive(url, check_lighthouse, check_links,
+                                                check_spelling, extra_words)
     else:
-        r, body = checks.check_url(url, check_lighthouse, check_links, check_spelling, extra_words, full_ignore)
+        r, body = checks.check_url(url, check_lighthouse, check_links,
+                                    check_spelling, extra_words, full_ignore)
         results = { "check" : { url : r } }
 
     # submitt results back to master #
