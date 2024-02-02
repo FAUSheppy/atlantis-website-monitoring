@@ -147,7 +147,7 @@ def get_check_info():
 
     # get all URLs with outdated checks #
     run_before_base = datetime.datetime.now() - datetime.timedelta(minutes=5)
-    outdated_joined = db.session.query(URL).join(CheckResult, URL.base_url == CheckResult.parent)
+    outdated_joined = db.session.query(URL).join(CheckResult, URL.uuid == CheckResult.parent)
     outdated_results = outdated_joined.filter(
             and_(CheckResult.timestamp < run_before_base.timestamp(), 
                  CheckResult.timestamp != None)).all()
@@ -224,7 +224,8 @@ def submit_check():
                 check_failed_message += "\n".join(check_result_obj.links_results)
 
         # overall fail ? #
-        check_result_obj.base_check = bool(check_failed_message)
+        # check = False (fail) if message is non-empty #
+        check_result_obj.base_check = not bool(check_failed_message)
         check_result_obj.check_failed_message = check_failed_message
 
         # add and commit #
@@ -239,11 +240,16 @@ def submit_check():
 
         last = last_q.first()
 
+        # dispatch dummy message #
+        if(not last and not check_result_obj.base_check) or (last and last.base_check != check_result_obj.base_check):
+            payload = { "users": [url_obj.owner], "msg" : check_failed_message }
+            print("Dispatch would have fired with {}".format(json.dumps(payload, indent=2)))
+
         # dispatch configured and based check failed + either no last result or last was success #
         if(((not last and not check_result_obj.base_check)
                 or (last and last.base_check != check_result_obj.base_check))
                 and app.config.get("DISPATCH_SERVER")):
-            payload = { "users": [target_user], "msg" : message }
+            payload = { "users": [url_obj.owner], "msg" : check_failed_message }
             r = requests.post(app.config["DISPATCH_SERVER"] + "/smart-send",
                                  json=payload, auth=app.config["DISPATCH_AUTH"])
 
