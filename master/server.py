@@ -71,6 +71,19 @@ class URL(db.Model):
         dt = datetime.datetime.fromtimestamp(self.timestamp)
         return dt.strftime("%d. %B %Y at %H:%M")
 
+    def serialize(self):
+        return {
+            "uuid" : self.uuid,
+            "base_url" : self.base_url,
+            "owner" : self.owner,
+            "check_spelling" : self.check_spelling,
+            "check_lighthouse" : self.check_lighthouse,
+            "check_links" : self.check_links,
+            "recursive" : self.recursive,
+            "master_host" : self.master_host,
+            "disabled" : self.disabled,
+        }
+
 
 class CheckResult(db.Model):
 
@@ -81,7 +94,7 @@ class CheckResult(db.Model):
 
     url = Column(String)
     base_check = Column(String)
-    timstamp = Column(String)
+    timestamp = Column(String)
 
     lighthouse_score = Column(String)
     lighthouse_results = Column(String)
@@ -90,6 +103,40 @@ class CheckResult(db.Model):
     links_failed_count = Column(Integer)
 
     check_failed_message = Column(String)
+
+@app.route("/get-check-info")
+def get_check_info():
+    '''Get info about checks for scheduler'''
+
+    # get all URLs with no checks so far #
+    no_check_results = db.session.query(URL).outerjoin(
+                        CheckResult, URL.uuid==CheckResult.parent).filter(CheckResult.uuid==None).all()
+
+    # get all URLs with outdated checks #
+    run_before_base = datetime.datetime.now() - datetime.timedelta(minutes=5)
+    outdated_joined = db.session.query(URL).join(CheckResult, URL.base_url == CheckResult.parent)
+    outdated_results = outdated_joined.filter(
+                and_(CheckResult.timestamp < run_before_base.isoformat(), CheckResult.timestamp != None)).all()
+
+    # updated outdated checks with extended #
+    run_before_extended = datetime.datetime.now() - datetime.timedelta(hours=23)
+    all_list = db.session.query(URL).filter().all()
+    all_list = db.session.query(URL).join(CheckResult, URL.base_url == CheckResult.parent).all()
+    for url_obj in all_list:
+        timestamp = datetime.datetime.fromisoformat(url_obj.timestamp)
+        if timestamp > run_before_extended:
+
+            # find in list by uuid
+            target_obj_index = outdated_results.index(url.uuid)
+
+            # set exteneded check to false in the outdated list #
+            outdated_results[target_obj_index].check_links = False
+            outdated_results[target_obj_index].check_lighthouse = False
+            outdated_results[target_obj_index].check_spelling = False
+
+    # combine & return results #
+    combined_list = [ r.serialize() for r in no_check_results + outdated_results]
+    return flask.jsonify(json_list=combined_list)
 
 @app.route("/submit-check", methods=["POST"])
 def submit_check():
