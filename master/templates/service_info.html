@@ -42,21 +42,9 @@
 
             <!-- last status -->
             <div class="last-status">
-                <p style="color: darkred;">No status for this site submitted</p>
+                <p style="color: darkred;">Status: {{ url_check_obj.last_status() }}</p>
             </div>
 
-            <!-- status list -->
-            <table>
-                <tbody class="mt-2">
-                    {% for status in status_list %}
-                    <tr>
-                        <td>{{ status.human_date()  }}</td>
-                        <td class="{{ status.status }}">{{ status.status }}</td>
-                        <td>{{ status.info_text     }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
         </div>
     </body>
 </html>

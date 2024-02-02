@@ -30,13 +30,18 @@
                 {{ form.url.label }}
 
                 {% if is_modification %}
-                {{ form.url(size=20, disabled=True) }}
+                {{ form.url(size=20) }}
                 {% else %}
                 {{ form.url(size=20) }}
                 {% endif %}
+                <br>
+                {{ form.master_host.label }}  {{ form.master_host() }}        </br>
 
                 </br>
                 {{ form.recursive.label }}  {{ form.recursive() }}        </br>
+                {{ form.check_links.label }}  {{ form.check_links() }}        </br>
+                {{ form.check_lighthouse.label }}  {{ form.check_lighthouse() }}        </br>
+                {{ form.check_spelling.label }}  {{ form.check_spelling() }}        </br>
 
                 {% if is_modification %}
                 <input class="form-button mt-4" type="submit" value="Send Modification">

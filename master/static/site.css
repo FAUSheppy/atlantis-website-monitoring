@@ -206,3 +206,15 @@ td{
 .errros{
     color: red;
 }
+
+.status-warning{
+    background-color: orange !important;
+}
+
+.status-error{
+    background-color: red !important;
+}
+
+.status-unkown{
+    background-color: purple !important;
+}

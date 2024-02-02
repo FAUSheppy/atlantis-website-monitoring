@@ -6,30 +6,29 @@
             <div class="row">
                 {% for obj in url_checks %}
                 <a href="/check-details?url={{ obj.base_url }}"
-                   class="col-md-5 m-3 p-2 border rounded overview-tile"
+                   class="col-md-5 m-3 p-2 border rounded overview-tile
+                            status-{{ obj.last_status().lower() }}"
                         {% if obj.check_is_failed %}
                             style="background-color: #ff00005c;"
                         {% else %}
                             style="background-color: lightgreen;"
                         {% endif %}
                     >
-                    <div class="overview-tile-titel mb-2">{{ obj.url }}</div>
-                    <div class="overview-tile-status {{ TODO }}">
-                        on: {{ obj.master_host }}
+                    <div class="overview-tile-titel mb-2">
+                        Check
+                    </div>
+                    <div class="overview-tile-status">
+                        on: {{ obj.master_host or "default-host" }}
                     </div>
 
                     <div class="overview-tile-info-text">
                         <small>
-                          -- NO TEXT --
+                            {{ obj.base_url }}
                         </small>
                     </div>
 
                     <small class="overview-tile-date pt-2">
-                    {% if 0 == 0 %}
-                    Service never reported in
-                    {% else %}
-                    {{ obj.human_date() }}
-                    {% endif %}
+                    {{ obj.last_human_date() }}
                     </small>
                 </a>
                 {% endfor %}

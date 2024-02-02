@@ -32,7 +32,13 @@ class EntryForm(FlaskForm):
 
     url = StringField("URL", validators=[URL()])
     uuid_hidden = HiddenField("service_hidden")
-    recursive = BooleanField("recursive")
+    recursive = BooleanField("Recursive Check")
+    
+    check_links = BooleanField("Check Links")
+    check_lighthouse = BooleanField("Check Performance")
+    check_spelling = BooleanField("Check Spelling")
+
+    master_host = StringField("Group")
 
 class DictionaryWord(db.Model):
 
@@ -65,11 +71,35 @@ class URL(db.Model):
     # disabled #
     disabled = Column(Boolean)
 
-    settings = relationship("CheckResult", uselist=True)
+    results = relationship("CheckResult", uselist=True)
 
-    def human_date(self):
-        dt = datetime.datetime.fromtimestamp(self.timestamp)
-        return dt.strftime("%d. %B %Y at %H:%M")
+    def last_result(self):
+
+        last_query = db.session.query(CheckResult).filter(CheckResult.parent==self.uuid)
+        last = last_query.order_by(CheckResult.timestamp.desc()).first()
+
+        return last
+
+    def last_human_date(self):
+        '''Get the last timestamp for an URL'''
+
+        last = self.last_result()
+        if last:
+            dt = datetime.datetime.fromtimestamp(last.timestamp)
+            return dt.strftime("%d. %B %Y at %H:%M")
+        else:
+            return "No Check for this URL"
+    
+    def last_status(self):
+
+        last = self.last_result()
+        if last:
+            if last.base_check == 0:
+                return "OK"
+            else:
+                return "ERROR"
+        else:
+            return "UKNOWN"
 
     def serialize(self):
         return {
@@ -90,13 +120,13 @@ class CheckResult(db.Model):
     __tablename__ = "results"
 
     uuid = Column(String, primary_key=True)
-    parent = Column(String, ForeignKey("url.base_url"))
+    parent = Column(String, ForeignKey("url.uuid"))
 
     url = Column(String)
-    base_check = Column(String)
-    timestamp = Column(String)
+    base_check = Column(Boolean)
+    timestamp = Column(Integer)
 
-    lighthouse_score = Column(String)
+    lighthouse_score = Column(Integer)
     lighthouse_results = Column(String)
 
     links_results = Column(String)
@@ -110,20 +140,21 @@ def get_check_info():
 
     # get all URLs with no checks so far #
     no_check_results = db.session.query(URL).outerjoin(
-                        CheckResult, URL.uuid==CheckResult.parent).filter(CheckResult.uuid==None).all()
+                CheckResult, URL.uuid==CheckResult.parent).filter(CheckResult.uuid==None).all()
 
     # get all URLs with outdated checks #
     run_before_base = datetime.datetime.now() - datetime.timedelta(minutes=5)
     outdated_joined = db.session.query(URL).join(CheckResult, URL.base_url == CheckResult.parent)
     outdated_results = outdated_joined.filter(
-                and_(CheckResult.timestamp < run_before_base.isoformat(), CheckResult.timestamp != None)).all()
+            and_(CheckResult.timestamp < run_before_base.timestamp(), 
+                 CheckResult.timestamp != None)).all()
 
     # updated outdated checks with extended #
     run_before_extended = datetime.datetime.now() - datetime.timedelta(hours=23)
     all_list = db.session.query(URL).filter().all()
     all_list = db.session.query(URL).join(CheckResult, URL.base_url == CheckResult.parent).all()
     for url_obj in all_list:
-        timestamp = datetime.datetime.fromisoformat(url_obj.timestamp)
+        timestamp = datetime.datetime.fromtimestamp(url_obj.timestamp)
         if timestamp > run_before_extended:
 
             # find in list by uuid
@@ -159,10 +190,11 @@ def submit_check():
         check_result_obj.uuid = str(uuid.uuid4())
         check_result_obj.url = url
         check_result_obj.parent = url_obj.uuid
-        check_result_obj.timestamp = datetime.datetime.now().isoformat()
+        check_result_obj.timestamp = datetime.datetime.now().timestamp()
 
         # base check #
-        check_result_obj.base_check = results["base_status"]
+        check_result_obj.base_check = bool(results["base_status"])
+        print("Submited base status: {}".format(results["base_status"]))
         if not check_result_obj.base_check:
             check_failed_message += "ERROR: URL unreachable:\n{}\n".format(check_result_obj.url)
 
@@ -172,7 +204,8 @@ def submit_check():
 
             # lighthouse problem #
             if check_result_obj.lighthouse_score < 0.75:
-                check_failed_message += "Warning: Lighthouse score degraded\n{}\n".format(check_result_obj.url)
+                check_failed_message += "Warning: Lighthouse score degraded\n{}\n".format(
+                    check_result_obj.url)
 
         if "links" in results:
             check_result_obj.links_failed_count = results.get("links")["failed"]
@@ -193,10 +226,13 @@ def submit_check():
 
         # try to get last #
         last_q = db.session.query(CheckResult).filter(
-                    and_(CheckResult.parent==URL.uuid, CheckResult.url==jdict["url"], not_(CheckResult.uuid==check_result_obj.uuid)))
+                    and_(CheckResult.parent==URL.uuid, 
+                         CheckResult.url==jdict["url"], 
+                         not_(CheckResult.uuid==check_result_obj.uuid)))
+
         last = last_q.first()
 
-        # dispatch configured, and based check failed + either no last result or last result success #
+        # dispatch configured and based check failed + either no last result or last was success #
         if(((not last and not check_result_obj.base_check)
                 or (last and last.base_check != check_result_obj.base_check))
                 and app.config.get("DISPATCH_SERVER")):
@@ -252,7 +288,12 @@ def create_modify_entry(form, user):
 
     # keep token if modification #
     s_tmp = db.session.query(URL).filter(URL.uuid==uuid_hidden).first()
-    url_obj = URL(uuid=uuid_hidden, base_url=url, owner=user, token=token, recursive=form.recursive.data)
+    url_obj = URL(uuid=uuid_hidden, base_url=url, owner=user,
+                    token=token, recursive=form.recursive.data,
+                    check_links=form.check_links.data, 
+                    check_lighthouse=form.check_lighthouse.data,
+                    check_spelling=form.check_spelling.data,
+                    master_host=form.master_host.data)
 
     db.session.merge(url_obj)
     db.session.commit() 
@@ -278,7 +319,8 @@ def form_endpoint():
 
     user = flask.request.headers.get("X-Forwarded-Preferred-Username") or "anonymous"
     url = flask.request.args.get("url")
-    url_obj = del_object = db.session.query(URL).filter(and_(URL.base_url==url, URL.owner==user)).first()
+    url_obj = del_object = db.session.query(URL).filter(
+                    and_(URL.base_url==url, URL.owner==user)).first()
 
     # check if is delete #
     operation = flask.request.args.get("operation")
@@ -298,6 +340,10 @@ def form_endpoint():
     if url_obj: # TODO fix this use UUID for mod not URL (create double)
         form.url.default = url_obj.base_url
         form.recursive.default = url_obj.recursive
+        form.check_links.default = url_obj.check_links
+        form.check_lighthouse.default = url_obj.check_lighthouse
+        form.check_spelling.default = url_obj.check_spelling
+        form.master_host.default = url_obj.master_host
         form.uuid_hidden.default = url_obj.uuid
         form.process()
     elif url:
@@ -309,10 +355,9 @@ def form_endpoint():
             service_name = form.url.data
             return flask.redirect('/check-details?url={}'.format(service_name))
         else:
-            print(form.url.data)
             return flask.render_template('add_modify_form.html', form=form)
     else:
-        return flask.render_template('add_modify_form.html', form=form)
+        return flask.render_template('add_modify_form.html', form=form, is_modification=bool(url))
 
 @app.route("/")
 @app.route("/overview")
@@ -320,7 +365,8 @@ def index():
 
     user = flask.request.headers.get("X-Forwarded-Preferred-Username") or "anonymous"
     url_checks = db.session.query(URL).filter(URL.owner==user).all()
-    return flask.render_template("overview.html", user=user, config=app.config, url_checks=url_checks)
+    return flask.render_template("overview.html", user=user, config=app.config, 
+                url_checks=url_checks)
 
 def create_app():
 
@@ -332,7 +378,8 @@ def create_app():
     if not app.config["DISPATCH_SERVER"]:
         print("Warning: env:DISPATCH_SERVER not configured!", file=sys.stderr)
     else:
-        app.config["DISPATCH_AUTH"] = (os.environ["DISPATCH_AUTH_USER"], os.environ["DISPATCH_AUTH_PASSWORD"])
+        app.config["DISPATCH_AUTH"] = (os.environ["DISPATCH_AUTH_USER"],
+                                       os.environ["DISPATCH_AUTH_PASSWORD"])
 
     # set rabbitmq connection #
     app.config["QUEUE_SERVER"] = os.environ.get("QUEUE_SERVER")
