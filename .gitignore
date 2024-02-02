@@ -3,3 +3,4 @@
 instance/
 dispatcher_passfile.txt
 __pycache__/
+sqlite.db
