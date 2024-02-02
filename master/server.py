@@ -132,6 +132,9 @@ class CheckResult(db.Model):
     links_results = Column(String)
     links_failed_count = Column(Integer)
 
+    spelling = Column(String)
+    spelling_failed_count = Column(Integer)
+
     check_failed_message = Column(String)
 
 @app.route("/get-check-info")
@@ -181,7 +184,7 @@ def submit_check():
     if not "token" in jdict or url_obj.token != jdict.get("token"):
         return ("Missing or wrong token in submission", 401)
 
-    for url, results, in jdict["check"].items():
+    for url, results in jdict["check"]:
 
         check_failed_message = ""
 
@@ -198,6 +201,10 @@ def submit_check():
         if not check_result_obj.base_check:
             check_failed_message += "ERROR: URL unreachable:\n{}\n".format(check_result_obj.url)
 
+        if "spelling" in results:
+            check_result_obj.spelling = json.dumps(results.get("spelling"))
+            check_result_obj.spelling_failed_count = len(results.get("spelling"))
+
         if "lighthouse" in results:
             check_result_obj.lighthouse_audits = results.get("lighthouse").get("results")
             check_result_obj.lighthouse_score = results.get("lighthouse").get("score")
@@ -208,11 +215,11 @@ def submit_check():
                     check_result_obj.url)
 
         if "links" in results:
-            check_result_obj.links_failed_count = results.get("links")["failed"]
-            check_result_obj.links_results = results.get("links")["results"]
+            check_result_obj.links_failed_count = results["links"]["failed"]
+            check_result_obj.links_results = json.dumps(results["links"]["results"])
 
             # dead links problem #
-            if check_result_obj.links_results > 0:
+            if check_result_obj.links_failed_count > 0:
                 check_failed_message += "Warning: Dead Links on Website ->\n"
                 check_failed_message += "\n".join(check_result_obj.links_results)
 

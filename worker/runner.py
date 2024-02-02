@@ -52,12 +52,13 @@ def callback(ch, method, properties, body):
     else:
         r, body = checks.check_url(url, check_lighthouse, check_links,
                                     check_spelling, extra_words, full_ignore)
-        results = { "check" : { url : r } }
+        results = { "check" : [(url,r)] }
 
     # submitt results back to master #
     results.update({ "token" : d.get("token") })
     results.update({ "url" : url })
 
+    print(json.dumps(results, indent=2))
     r = requests.post("{}{}".format(MASTER_HOST, "/submit-check"), json=results)
     print(r.status_code, r.content)
 

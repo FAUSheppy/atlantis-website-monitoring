@@ -66,7 +66,8 @@ def check_spelling_f(body, extra_words=[], full_ignore=[]):
 
     # get all texts from page #
     soup = bs4.BeautifulSoup(body, 'html.parser')
-    texts = [ child.get_text() for child in soup.find_all() if isinstance(child.string, bs4.NavigableString) ]
+    texts = [ child.get_text() for child in soup.find_all() 
+                    if isinstance(child.string, bs4.NavigableString) ]
 
     ret = dict()
     for t in texts:
@@ -87,7 +88,6 @@ def check_spelling_f(body, extra_words=[], full_ignore=[]):
         suggestions = sym_spell.lookup_compound(t_clean, max_edit_distance=2, transfer_casing=True)
 
         print("===============================")
-        print("'{}'".format(t_clean))
         for suggestion in suggestions:
 
             if suggestion.distance == 0:
@@ -105,7 +105,7 @@ def check_spelling_f(body, extra_words=[], full_ignore=[]):
             if old_diff == new_diff:
                 continue
             
-            ret.update({ t : suggestion })
+            ret.update({ t : str(suggestion) })
             break
 
     return ret
@@ -121,11 +121,10 @@ def check_links_f(url, body):
     while not urls_todo.empty():
        
         cur = urls_todo.get()
-        print(cur)
         time.sleep(1)
         result, body = check_url(cur, False, False, False)
-        failed = _check_base_status(result["base_status"])
-        results.append({ cur : failed })
+        failed = not result["base_status"]
+        results.append({ cur : not failed })
         
         if failed:
             failed_count += 1
@@ -142,6 +141,12 @@ def _put_urls_for_body(body, urls_todo, urls_queued, current_url):
 
     for l in link_list:
 
+        # skip special links #
+        print(l)
+        if l.startswith(("tel:", "steam:", "xdg-open:", "mailto:")):
+            print("Skipping... {}".format(l))
+            continue
+
         # check if internal URL #
         link_parsed = urllib.parse.urlparse(l)
         cur_url_parsed = urllib.parse.urlparse(current_url)
@@ -150,31 +155,38 @@ def _put_urls_for_body(body, urls_todo, urls_queued, current_url):
 
         # add base for pyrequests #
         if not link_parsed.netloc:
-                l = "{}://{}{}".format(cur_url_parsed.scheme, cur_url_parsed.netloc, link_parsed.path)
+            l = "{}://{}{}".format(cur_url_parsed.scheme, cur_url_parsed.netloc, link_parsed.path)
+            l = l.rstrip("/") # remove any tailing /
 
         # check if url is already queued #
         if l in urls_queued:
+            print("Skipping.. {}".format(l))
             continue
         else:
             # queue and mark queued #
+            print("Queued.. {}".format(l))
             urls_queued.update({l:True})
             urls_todo.put(l)
 
-def check_url_recursive(url, check_lighthouse, check_links, check_spelling, extra_words=[], full_ignore=[]):
+def check_url_recursive(url, check_lighthouse, check_links, check_spelling,
+                            extra_words=[], full_ignore=[]):
 
     results = dict()
     urls_queued = dict()
     urls_todo = queue.Queue()
     urls_todo.put(url)
 
+    results.update({ "check" : [] })
+
     while not urls_todo.empty():
 
         result, body = check_url(urls_todo.get(), check_lighthouse, check_links, check_spelling,
                                     extra_words, full_ignore)
+
         _put_urls_for_body(body, urls_todo, urls_queued, current_url=url)
 
         # add to results #
-        results.update({ "url" : result })
+        results["check"].append((url, result))
 
     return results
 
