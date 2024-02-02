@@ -136,7 +136,7 @@ def get_check_info():
 
     # combine & return results #
     combined_list = [ r.serialize() for r in no_check_results + outdated_results]
-    return flask.jsonify(json_list=combined_list)
+    return flask.jsonify(combined_list)
 
 @app.route("/submit-check", methods=["POST"])
 def submit_check():
@@ -159,7 +159,7 @@ def submit_check():
         check_result_obj.uuid = str(uuid.uuid4())
         check_result_obj.url = url
         check_result_obj.parent = url_obj.uuid
-        check_result_obj.timstamp = datetime.datetime.now().isoformat()
+        check_result_obj.timestamp = datetime.datetime.now().isoformat()
 
         # base check #
         check_result_obj.base_check = results["base_status"]
