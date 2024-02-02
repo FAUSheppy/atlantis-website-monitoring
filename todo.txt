@@ -1,5 +1,6 @@
-- push correct data to queue
-- have a 3rd container schedule checks
+[x] push correct data to queue
+[x] have a 3rd container schedule checks
+[ ] replace all database timestamps with unix timestamps and INTEGER
 - display check results based on latest checkresult
 
 - display lighthouse base info
