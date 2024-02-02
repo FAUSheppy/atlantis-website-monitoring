@@ -4,13 +4,36 @@ import argparse
 import checks
 import json
 import sys
+import datetime
 
 MASTER_HOST = None
 FILE_OVERWRITE = None
 
+recent_events = {}
+purge_cycle_next = None
+
+def _is_recent_duplicate(body):
+
+    global purge_cycle_next
+    global recent_events
+
+    if not purge_cycle_next or purge_cycle_next < datetime.datetime.now():
+        purge_cycle_next = datetime.datetime.now() + datetime.timedelta(minutes=5)
+        recent_events = {}
+
+    if hash(body) in recent_events:
+        return True
+    else:
+        recent_events.update({ hash(body) : datetime.datetime.now() })
+        return False
+
 def callback(ch, method, properties, body):
 
     print(body)
+    if _is_recent_duplicate(body):
+        print("Skipping.. (duplicate)")
+        return
+
     d = json.loads(body)
 
     url = d.get("url")
