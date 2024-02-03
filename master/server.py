@@ -11,6 +11,7 @@ import datetime
 import pika
 import secrets
 import uuid
+import time
 from flask_wtf import CSRFProtect
 
 import sqlalchemy
@@ -207,7 +208,7 @@ def submit_check():
 
         if "lighthouse" in results:
             check_result_obj.lighthouse_audits = results.get("lighthouse").get("results")
-            check_result_obj.lighthouse_score = results.get("lighthouse").get("score")
+            check_result_obj.lighthouse_score = results.get("lighthouse").get("score").get("performance")
 
             # lighthouse problem #
             if check_result_obj.lighthouse_score < 0.75:
@@ -398,9 +399,16 @@ def create_app():
     app.config["QUEUE_HOST"] = os.environ.get("QUEUE_HOST")
 
     # check pika connection #
-    test_c = pika.BlockingConnection(pika.ConnectionParameters(app.config["QUEUE_HOST"]))
-    assert(test_c.is_open)
-    test_c.close()
+    for i in range(0,5):
+        try:
+            test_c = pika.BlockingConnection(pika.ConnectionParameters(app.config["QUEUE_HOST"]))
+            test_c.close()
+            break
+        except pika.exceptions.AMQPConnectionError as e:
+            print(e, file=sys.stderr)
+
+        print("Retrying in... {}s".format(i*60))
+        time.sleep(i*20)
 
     # set secret for CSRF #
     app.config["SECRET_KEY"] = secrets.token_urlsafe(64)

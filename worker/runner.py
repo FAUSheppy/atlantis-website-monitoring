@@ -1,4 +1,5 @@
 import pika
+import json
 import requests
 import argparse
 import checks
@@ -6,6 +7,7 @@ import json
 import sys
 import datetime
 import os
+import time
 
 MASTER_HOST = None
 FILE_OVERWRITE = None
@@ -99,8 +101,18 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # Establish connection to RabbitMQ server
-    connection = pika.BlockingConnection(pika.ConnectionParameters(queue_host))
-    channel = connection.channel()
-    channel.queue_declare(queue=queue_name)
-    channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=True)
-    channel.start_consuming()
+    for i in range(0,5):
+
+        try:
+            connection = pika.BlockingConnection(pika.ConnectionParameters(queue_host))
+            print("Connected successfully to {}".format(queue_host))
+            channel = connection.channel()
+            channel.queue_declare(queue=queue_name)
+            channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=True)
+            channel.start_consuming()
+        except pika.exceptions.AMQPConnectionError as e:
+            print(type(e), file=sys.stderr)
+
+        # increasing backoff time #
+        print("Retrying in... {}s".format(i*20), file=sys.stderr)
+        time.sleep(i*60)

@@ -24,12 +24,13 @@ if __name__ == "__main__":
 
     sleep_time = args.sleep_time
     if os.environ.get("SLEEP_TIME"):
-        sleep_time = os.environ.get("SLEEP_TIME")
+        sleep_time = float(os.environ.get("SLEEP_TIME"))
 
     while(True):
 
         try:
             r = requests.get(master_host + "/get-check-info")
+            print(r.content)
             for c in r.json():
                 print(c)
                 requests.get(master_host + "/schedule-check?url={}".format(c["base_url"]))

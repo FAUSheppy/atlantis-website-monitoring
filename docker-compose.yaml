@@ -11,8 +11,8 @@ services:
         #    - /data/atlantis-hub/static-cache/:/app/static/cache/
         environment:
             - QUEUE_HOST=queue
-            - QUEUE_NAME=scheduler
-            - DISPATCH_SERVER=dispatch.atlantishq.de
+            - QUEUE_NAME=scheduled
+            - DISPATCH_SERVER=https://dispatch.atlantishq.de
             - DISPATCH_AUTH_USER=""
             - DISPATCH_AUTH_PASSWORD=""
     scheduler:
@@ -22,9 +22,12 @@ services:
             - master
         environment:
             - MASTER_HOST=master:5000
+            - SLEEP_TIME=1
     queue:
         image: rabbitmq
         restart: always
+        ports:
+            - 5672:5672
         environment:
             - MASTER_HOST=master:5000
             - SLEEP_TIME=5
@@ -36,4 +39,4 @@ services:
         environment:
             - MASTER_HOST=master:5000
             - QUEUE_HOST=queue
-            - QUEUE_NAME=scheduler
+            - QUEUE_NAME=scheduled
