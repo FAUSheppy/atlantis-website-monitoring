@@ -280,7 +280,7 @@ def schedule_check():
         "token" : url_obj.token,
     }
 
-    connection = pika.BlockingConnection(pika.ConnectionParameters(app.config["QUEUE_SERVER"]))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(app.config["QUEUE_HOST"]))
     channel = connection.channel()
     channel.queue_declare(queue='scheduled')
     channel.basic_publish(exchange='', routing_key='scheduled', body=json.dumps(push_dict))
@@ -395,10 +395,10 @@ def create_app():
                                        os.environ["DISPATCH_AUTH_PASSWORD"])
 
     # set rabbitmq connection #
-    app.config["QUEUE_SERVER"] = os.environ.get("QUEUE_SERVER")
+    app.config["QUEUE_HOST"] = os.environ.get("QUEUE_HOST")
 
     # check pika connection #
-    test_c = pika.BlockingConnection(pika.ConnectionParameters(app.config["QUEUE_SERVER"]))
+    test_c = pika.BlockingConnection(pika.ConnectionParameters(app.config["QUEUE_HOST"]))
     assert(test_c.is_open)
     test_c.close()
 
@@ -419,7 +419,7 @@ if __name__ == "__main__":
     parser.add_argument("-q", "--queue",     default="localhost", help="Pika queue target")
 
     args = parser.parse_args()
-    os.environ["QUEUE_SERVER"] = args.queue
+    os.environ["QUEUE_HOST"] = args.queue
 
     with app.app_context():
         create_app()

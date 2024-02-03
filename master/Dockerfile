@@ -1,9 +1,16 @@
-FROM debian:bookworm
-RUN apt update -y
-RUN apt upgrade -y
-RUN apt install nodejs npm python3 python3-pip -y
-RUN python3 -m pip install symspellpy lighthouse-python-plus --break-system-packages
-RUN apt install chromium -y
-RUN npm install -g lighthouse
-RUN wget https://github.com/wolfgarbe/SymSpell/blob/master/SymSpell.FrequencyDictionary/de-100k.txt
-CMD sleep 1000000
+FROM python:3-alpine
+
+RUN apk add --no-cache curl
+
+RUN pip install --no-cache-dir -U pip
+RUN pip install --no-cache-dir --break-system-packages waitress
+
+COPY req.txt .
+RUN pip install --no-cache-dir -r req.txt
+RUN apk del py-pip --no-cache
+
+WORKDIR /app
+COPY ./ .
+
+ENTRYPOINT ["waitress-serve"] 
+CMD ["--host", "0.0.0.0", "--port", "5000", "--call", "app:createApp"]

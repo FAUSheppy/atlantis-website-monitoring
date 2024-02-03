@@ -1,0 +1,39 @@
+version: "3.3"
+services:
+    master:
+        image: master
+        restart: always
+        ports:
+            - 5000:5000
+        depends_on:
+            - queue
+        #volumes:
+        #    - /data/atlantis-hub/static-cache/:/app/static/cache/
+        environment:
+            - QUEUE_HOST=queue
+            - QUEUE_NAME=scheduler
+            - DISPATCH_SERVER=dispatch.atlantishq.de
+            - DISPATCH_AUTH_USER=""
+            - DISPATCH_AUTH_PASSWORD=""
+    scheduler:
+        image: scheduler
+        restart: always
+        depends_on:
+            - master
+        environment:
+            - MASTER_HOST=master:5000
+    queue:
+        image: rabbitmq
+        restart: always
+        environment:
+            - MASTER_HOST=master:5000
+            - SLEEP_TIME=5
+    worker:
+        image: worker
+        restart: always
+        depends_on:
+            - master
+        environment:
+            - MASTER_HOST=master:5000
+            - QUEUE_HOST=queue
+            - QUEUE_NAME=scheduler

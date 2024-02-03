@@ -1,3 +1,4 @@
+import os
 import json
 import sys
 import requests
@@ -13,10 +14,26 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--sleep-time", type=float, default=5, help="Run every x-minutes")
     args = parser.parse_args()
 
-    while(True):
-        r = requests.get(args.master_host + "/get-check-info")
-        for c in r.json():
-            print(c)
-            requests.get(args.master_host + "/schedule-check?url={}".format(c["base_url"]))
+    master_host = args.master_host
+    if os.environ.get("MASTER_HOST"):
+        master_host = os.environ.get("MASTER_HOST")
 
-        time.sleep(int(args.sleep_time*60))
+    # default to http if scheme is missing #
+    if not master_host.startswith(("https://", "http://")):
+        master_host = "http://" + master_host
+
+    sleep_time = args.sleep_time
+    if os.environ.get("SLEEP_TIME"):
+        sleep_time = os.environ.get("SLEEP_TIME")
+
+    while(True):
+
+        try:
+            r = requests.get(master_host + "/get-check-info")
+            for c in r.json():
+                print(c)
+                requests.get(master_host + "/schedule-check?url={}".format(c["base_url"]))
+        except requests.exceptions.ConnectionError as e:
+            print(e)
+
+        time.sleep(int(sleep_time*60))

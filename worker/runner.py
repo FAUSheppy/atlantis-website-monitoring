@@ -5,6 +5,7 @@ import checks
 import json
 import sys
 import datetime
+import os
 
 MASTER_HOST = None
 FILE_OVERWRITE = None
@@ -78,14 +79,28 @@ if __name__ == "__main__":
     MASTER_HOST = args.master_host
     FILE_OVERWRITE = args.file_overwrite
 
+    queue_host = args.queue_host
+    queue_name = args.queue_name
+
+    if os.environ.get("MASTER_HOST"):
+        MASTER_HOST = os.environ.get("MASTER_HOST")
+    if os.environ.get("QUEUE_HOST"):
+        queue_host = os.environ.get("QUEUE_HOST")
+    if os.environ.get("QUEUE_NAME"):
+        queue_name = os.environ.get("QUEUE_NAME")
+
+    if not MASTER_HOST.startswith(("https://", "http://")):
+        MASTER_HOST = "http://" + MASTER_HOST
+
+
     if FILE_OVERWRITE:
         with open(FILE_OVERWRITE) as f:
             callback(None, None, None, f.read())
         sys.exit(0)
 
     # Establish connection to RabbitMQ server
-    connection = pika.BlockingConnection(pika.ConnectionParameters(args.queue_host))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(queue_host))
     channel = connection.channel()
-    channel.queue_declare(queue='scheduled')
-    channel.basic_consume(queue='scheduled', on_message_callback=callback, auto_ack=True)
+    channel.queue_declare(queue=queue_name)
+    channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=True)
     channel.start_consuming()
