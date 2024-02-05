@@ -281,7 +281,7 @@ def submit_check():
 @app.route("/schedule-check", methods=["POST"])
 def schedule_check():
 
-    user = flask.request.json.get("owner") or anonymous
+    user = flask.request.json.get("owner") or "anonymous"
     print(user)
     url = flask.request.args.get("url")
 
