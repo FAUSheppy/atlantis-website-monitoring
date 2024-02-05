@@ -207,12 +207,16 @@ td{
     color: red;
 }
 
+.status-ok{
+    background-color: lightgreen !important;
+}
+
 .status-warning{
     background-color: orange !important;
 }
 
 .status-error{
-    background-color: red !important;
+    background-color: #ff1414d1 !important;
 }
 
 .status-unkown{

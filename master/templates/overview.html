@@ -8,11 +8,6 @@
                 <a href="/check-details?url={{ obj.base_url }}"
                    class="col-md-5 m-3 p-2 border rounded overview-tile
                             status-{{ obj.last_status().lower() }}"
-                        {% if obj.check_is_failed %}
-                            style="background-color: #ff00005c;"
-                        {% else %}
-                            style="background-color: lightgreen;"
-                        {% endif %}
                     >
                     <div class="overview-tile-titel mb-2">
                         Check
