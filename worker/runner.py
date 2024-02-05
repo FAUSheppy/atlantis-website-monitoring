@@ -33,11 +33,11 @@ def _is_recent_duplicate(body):
 def callback(ch, method, properties, body):
 
     print(body)
-    if _is_recent_duplicate(body):
+    d = json.loads(body)
+
+    if not d.get("force_run") and _is_recent_duplicate(body):
         print("Skipping.. (duplicate)")
         return
-
-    d = json.loads(body)
 
     url = d.get("url")
     recursive = d.get("recursive")

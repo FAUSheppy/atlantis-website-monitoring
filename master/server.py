@@ -299,10 +299,14 @@ def schedule_check():
         "token" : url_obj.token,
     }
 
+    # force run #
+    if flask.request.args.get("force-run") == "1" or flask.request.json.get("force-run"):
+        push_dict.update({ "force_run" : True })
+
     # overwrite from request #
     for info in ["check_spelling", "check_lighthouse", "check_links"]:
         if info in flask.request.json:
-            push_dict.update({info : flask.request.json[info]})
+            push_dict.update({ info : flask.request.json[info] })
 
     connection = pika.BlockingConnection(pika.ConnectionParameters(app.config["QUEUE_HOST"]))
     channel = connection.channel()
