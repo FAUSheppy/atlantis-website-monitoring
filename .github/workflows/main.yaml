@@ -44,7 +44,7 @@ jobs:
           password: ${{ secrets.REGISTRY_PASS }}
       -
         name: Master
-        if: steps.filter.outputs.main == 'true'
+        if: steps.filter.outputs.master == 'true'
         uses: docker/build-push-action@v3
         with:
           context: ./master/
@@ -53,7 +53,7 @@ jobs:
           tags: "${{ secrets.REGISTRY }}/atlantishq/atlantis-webcheck-master:latest"
       -
         name: Scheduler
-        if: steps.filter.outputs.watcher == 'true'
+        if: steps.filter.outputs.scheduler == 'true'
         uses: docker/build-push-action@v3
         with:
           context: ./scheduler/
@@ -63,7 +63,7 @@ jobs:
       -
         name: Worker
         uses: docker/build-push-action@v3
-        if: steps.filter.outputs.importer == 'true'
+        if: steps.filter.outputs.worker == 'true'
         with:
           context: ./worker/
           platforms: linux/amd64

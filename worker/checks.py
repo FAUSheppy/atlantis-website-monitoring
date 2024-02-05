@@ -67,7 +67,7 @@ def check_spelling_f(body, extra_words=[], full_ignore=[]):
 
     # get all texts from page #
     soup = bs4.BeautifulSoup(body, 'html.parser')
-    texts = [ child.get_text() for child in soup.find_all() 
+    texts = [ child.get_text() for child in soup.find_all()
                     if isinstance(child.string, bs4.NavigableString) ]
 
     ret = dict()
@@ -95,7 +95,7 @@ def check_spelling_f(body, extra_words=[], full_ignore=[]):
                 continue
             elif len(t_clean) <= 1:
                 continue
-            
+
             # skip very high distances - indicative of non-text being analyzed #
             if (suggestion.distance/len(suggestion.term) > 0.5 or
                 (len(suggestion.term) > 20 and suggestion.distance/len(suggestion.term) > 0.2)):
@@ -105,7 +105,7 @@ def check_spelling_f(body, extra_words=[], full_ignore=[]):
             new_diff = re.sub(r'[\s.’\':,-]', '', suggestion.term)
             if old_diff == new_diff:
                 continue
-            
+
             ret.update({ t : str(suggestion) })
             break
 
@@ -120,13 +120,13 @@ def check_links_f(url, body):
 
     failed_count = 0
     while not urls_todo.empty():
-       
+
         cur = urls_todo.get()
         time.sleep(1)
         result, body = check_url(cur, False, False, False)
         failed = not result["base_status"]
         results.append({ cur : not failed })
-        
+
         if failed:
             failed_count += 1
 

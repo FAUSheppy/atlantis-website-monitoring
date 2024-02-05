@@ -1,4 +1,4 @@
-import hashlib                                                                                      
+import hashlib
 import os
 import flask
 import werkzeug
@@ -34,7 +34,7 @@ class EntryForm(FlaskForm):
     url = StringField("URL", validators=[URL()])
     uuid_hidden = HiddenField("service_hidden")
     recursive = BooleanField("Recursive Check")
-    
+
     check_links = BooleanField("Check Links")
     check_lighthouse = BooleanField("Check Performance")
     check_spelling = BooleanField("Check Spelling")
@@ -95,7 +95,7 @@ class URL(db.Model):
             return dt.strftime("%d. %B %Y at %H:%M")
         else:
             return "No Check for this URL"
-    
+
     def last_status(self):
 
         last = self.last_result()
@@ -158,7 +158,7 @@ def get_check_info():
     run_before_base = datetime.datetime.now() - datetime.timedelta(minutes=5)
     outdated_joined = db.session.query(URL).join(CheckResult, URL.uuid == CheckResult.parent)
     outdated_results = outdated_joined.filter(
-            and_(CheckResult.timestamp < run_before_base.timestamp(), 
+            and_(CheckResult.timestamp < run_before_base.timestamp(),
                  CheckResult.timestamp != None)).all()
 
     # updated outdated checks with extended #
@@ -246,22 +246,22 @@ def submit_check():
 
         # try to get last #
         last_q = db.session.query(CheckResult).filter(
-                    and_(CheckResult.parent==URL.uuid, 
-                         CheckResult.url==jdict["url"], 
+                    and_(CheckResult.parent==URL.uuid,
+                         CheckResult.url==jdict["url"],
                          not_(CheckResult.uuid==check_result_obj.uuid))).order_by(CheckResult.timestamp.desc())
 
         last = last_q.first()
-        
+
         # dispatch configured and based check failed + either no last result or last was success #
         if((not last and not check_result_obj.base_check)
                 or (last and last.base_check != check_result_obj.base_check)):
-                
+
             if check_result_obj.base_check:
                 # build recovery message payload #
                 payload = { "users": [url_obj.owner], "msg" : "{} recovered".format(check_result_obj.url) }
             else:
                 # build error message payload #
-                payload = { "users": [url_obj.owner], "msg" : 
+                payload = { "users": [url_obj.owner], "msg" :
                                 "{}\n{}".format(check_result_obj.url, check_failed_message) }
 
             # send dispatch #
@@ -331,13 +331,13 @@ def create_modify_entry(form, user):
     s_tmp = db.session.query(URL).filter(URL.uuid==uuid_hidden).first()
     url_obj = URL(uuid=uuid_hidden, base_url=url, owner=user,
                     token=token, recursive=form.recursive.data,
-                    check_links=form.check_links.data, 
+                    check_links=form.check_links.data,
                     check_lighthouse=form.check_lighthouse.data,
                     check_spelling=form.check_spelling.data,
                     master_host=form.master_host.data)
 
     db.session.merge(url_obj)
-    db.session.commit() 
+    db.session.commit()
 
 @app.route("/check-details")
 def check_details():
@@ -406,7 +406,7 @@ def index():
 
     user = flask.request.headers.get("X-Forwarded-Preferred-Username") or "anonymous"
     url_checks = db.session.query(URL).filter(URL.owner==user).all()
-    return flask.render_template("overview.html", user=user, config=app.config, 
+    return flask.render_template("overview.html", user=user, config=app.config,
                 url_checks=url_checks)
 
 def create_app():

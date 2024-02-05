@@ -48,7 +48,7 @@ def callback(ch, method, properties, body):
     check_lighthouse = d.get("check_lighthouse")
     check_links = d.get("check_links") or recursive
     check_spelling = d.get("check_spelling")
-    
+
     if recursive:
         results = checks.check_url_recursive(url, check_lighthouse, check_links,
                                                 check_spelling, extra_words)
