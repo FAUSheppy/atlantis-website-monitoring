@@ -32,8 +32,12 @@ if __name__ == "__main__":
             print(r.content)
             for c in r.json():
                 print(c)
-                requests.post(master_host + "/schedule-check?url={}".format(c["base_url"]), json=c)
+                r = requests.post(master_host + "/schedule-check?url={}".format(
+                                    c["base_url"]), json=c)
+                r.raise_for_status()
         except requests.exceptions.ConnectionError as e:
             print(e)
+        except requests.HTTPError as e:
+            print("WARNING:", e)
 
         time.sleep(int(sleep_time*60))
