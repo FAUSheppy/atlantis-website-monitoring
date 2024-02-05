@@ -122,7 +122,13 @@ def check_links_f(url, body):
     while not urls_todo.empty():
 
         cur = urls_todo.get()
-        time.sleep(1)
+        previous_hostname = urllib.parse.urlparse(url).hostname
+        cur_hostname = urllib.parse.urlparse(cur).hostname
+        if previous_hostname == cur_hostname:
+            print("no backoff for internal url: {}".format(cur))
+        else:
+            print("backoff for external url: {}".format(cur))
+            time.sleep(1)
         result, body = check_url(cur, False, False, False)
         failed = not result["base_status"]
         results.append({ cur : not failed })
