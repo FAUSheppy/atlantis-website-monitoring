@@ -100,8 +100,11 @@ class URL(db.Model):
 
         last = self.last_result()
         if last:
-            if last.base_check == 0:
-                return "OK"
+            if last.base_check == True:
+                if last.check_failed_message:
+                    return "WARNING"
+                else:
+                    return "OK"
             else:
                 return "ERROR"
         else:
@@ -245,23 +248,29 @@ def submit_check():
         last_q = db.session.query(CheckResult).filter(
                     and_(CheckResult.parent==URL.uuid, 
                          CheckResult.url==jdict["url"], 
-                         not_(CheckResult.uuid==check_result_obj.uuid)))
+                         not_(CheckResult.uuid==check_result_obj.uuid))).order_by(CheckResult.timestamp.desc())
 
         last = last_q.first()
-
-        # dispatch dummy message #
-        if((not last and not check_result_obj.base_check) 
-                or (last and last.base_check != check_result_obj.base_check)):
-            payload = { "users": [url_obj.owner], "msg" : check_failed_message }
-            print("Dispatch would have fired with {}".format(json.dumps(payload, indent=2)))
-
+        
         # dispatch configured and based check failed + either no last result or last was success #
-        if(((not last and not check_result_obj.base_check)
-                or (last and last.base_check != check_result_obj.base_check))
-                and app.config.get("DISPATCH_SERVER")):
-            payload = { "users": [url_obj.owner], "msg" : check_failed_message }
-            r = requests.post(app.config["DISPATCH_SERVER"] + "/smart-send",
+        if((not last and not check_result_obj.base_check)
+                or (last and last.base_check != check_result_obj.base_check)):
+                
+            if check_result_obj.base_check:
+                # build recovery message payload #
+                payload = { "users": [url_obj.owner], "msg" : "{} recovered".format(check_result_obj.url) }
+            else:
+                # build error message payload #
+                payload = { "users": [url_obj.owner], "msg" : 
+                                "{}\n{}".format(check_result_obj.url, check_failed_message) }
+
+            # send dispatch #
+            if app.config.get("DISPATCH_SERVER"):
+                r = requests.post(app.config["DISPATCH_SERVER"] + "/smart-send",
                                  json=payload, auth=app.config["DISPATCH_AUTH"])
+            else:
+                # dummy message if dispatch would have fired #
+                print("Dispatch would have fired (not configured) \n{}".format(json.dumps(payload, indent=2)))
 
         return "OK"
 
