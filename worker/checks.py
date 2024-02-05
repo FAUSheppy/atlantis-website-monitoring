@@ -142,6 +142,10 @@ def _put_urls_for_body(body, urls_todo, urls_queued, current_url):
 
     for l in link_list:
 
+        # skip empty #
+        if not l:
+            continue
+
         # skip special links #
         print(l)
         if l.startswith(("tel:", "steam:", "xdg-open:", "mailto:")):
