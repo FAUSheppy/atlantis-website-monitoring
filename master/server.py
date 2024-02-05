@@ -74,6 +74,11 @@ class URL(db.Model):
 
     results = relationship("CheckResult", uselist=True)
 
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.uuid == other
+        return self.uuid == other.uuid
+
     def last_result(self):
 
         last_query = db.session.query(CheckResult).filter(CheckResult.parent==self.uuid)
@@ -154,20 +159,24 @@ def get_check_info():
                  CheckResult.timestamp != None)).all()
 
     # updated outdated checks with extended #
-    run_before_extended = datetime.datetime.now() - datetime.timedelta(hours=23)
-    all_list = db.session.query(URL).filter().all()
-    all_list = db.session.query(URL).join(CheckResult, URL.base_url == CheckResult.parent).all()
-    for url_obj in all_list:
-        timestamp = datetime.datetime.fromtimestamp(url_obj.timestamp)
-        if timestamp > run_before_extended:
+    run_before_extended = datetime.datetime.now() - datetime.timedelta(hours=5)
+    not_outdated_extended = db.session.query(URL).join(CheckResult, URL.uuid == CheckResult.parent).filter(
+            and_(CheckResult.timestamp > run_before_extended.timestamp(), CheckResult.timestamp != None),
+                 or_(CheckResult.spelling.isnot(None),
+                     CheckResult.links_results.isnot(None),
+                     CheckResult.lighthouse_score.isnot(None))
+            ).all()
 
-            # find in list by uuid
-            target_obj_index = outdated_results.index(url.uuid)
+    for url_obj in not_outdated_extended:
 
-            # set exteneded check to false in the outdated list #
-            outdated_results[target_obj_index].check_links = False
-            outdated_results[target_obj_index].check_lighthouse = False
-            outdated_results[target_obj_index].check_spelling = False
+        print(url_obj.base_url, "removing advanced checks", file=sys.stderr)
+        # find in list by uuid
+        target_obj_index = outdated_results.index(url_obj.uuid)
+
+        # set exteneded check to false in the outdated list #
+        outdated_results[target_obj_index].check_links = False
+        outdated_results[target_obj_index].check_lighthouse = False
+        outdated_results[target_obj_index].check_spelling = False
 
     # combine & return results #
     combined_list = [ r.serialize() for r in no_check_results + outdated_results]
@@ -198,7 +207,6 @@ def submit_check():
 
         # base check #
         check_result_obj.base_check = bool(results["base_status"])
-        print("Submited base status: {}".format(results["base_status"]))
         if not check_result_obj.base_check:
             check_failed_message += "ERROR: URL unreachable:\n{}\n".format(check_result_obj.url)
 
@@ -242,7 +250,8 @@ def submit_check():
         last = last_q.first()
 
         # dispatch dummy message #
-        if(not last and not check_result_obj.base_check) or (last and last.base_check != check_result_obj.base_check):
+        if((not last and not check_result_obj.base_check) 
+                or (last and last.base_check != check_result_obj.base_check)):
             payload = { "users": [url_obj.owner], "msg" : check_failed_message }
             print("Dispatch would have fired with {}".format(json.dumps(payload, indent=2)))
 
@@ -256,7 +265,7 @@ def submit_check():
 
         return "OK"
 
-@app.route("/schedule-check")
+@app.route("/schedule-check", methods=["POST"])
 def schedule_check():
 
     user = flask.request.headers.get("X-Forwarded-Preferred-Username") or "anonymous"
@@ -280,6 +289,11 @@ def schedule_check():
         "recursive" : url_obj.recursive,
         "token" : url_obj.token,
     }
+
+    # overwrite from request #
+    for info in ["check_spelling", "check_lighthouse", "check_links"]:
+        if info in flask.request.json:
+            push_dict.update({info : flask.request.json[info]})
 
     connection = pika.BlockingConnection(pika.ConnectionParameters(app.config["QUEUE_HOST"]))
     channel = connection.channel()

@@ -33,7 +33,7 @@ if __name__ == "__main__":
             print(r.content)
             for c in r.json():
                 print(c)
-                requests.get(master_host + "/schedule-check?url={}".format(c["base_url"]))
+                requests.post(master_host + "/schedule-check?url={}".format(c["base_url"]), json=c)
         except requests.exceptions.ConnectionError as e:
             print(e)
 
