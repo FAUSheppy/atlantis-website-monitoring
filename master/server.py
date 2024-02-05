@@ -281,7 +281,8 @@ def submit_check():
 @app.route("/schedule-check", methods=["POST"])
 def schedule_check():
 
-    user = flask.request.headers.get("X-Forwarded-Preferred-Username") or "anonymous"
+    user = flask.request.json.get("owner") or anonymous
+    print(user)
     url = flask.request.args.get("url")
 
     if not url:
@@ -315,6 +316,7 @@ def schedule_check():
     connection = pika.BlockingConnection(pika.ConnectionParameters(app.config["QUEUE_HOST"]))
     channel = connection.channel()
     channel.queue_declare(queue='scheduled')
+    print(push_dict)
     channel.basic_publish(exchange='', routing_key='scheduled', body=json.dumps(push_dict))
     connection.close()
 
