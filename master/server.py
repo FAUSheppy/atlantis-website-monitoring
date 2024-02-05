@@ -237,7 +237,9 @@ def submit_check():
             # dead links problem #
             if check_result_obj.links_failed_count > 0:
                 check_failed_message += "Warning: Dead Links on Website ->\n"
-                check_failed_message += "\n".join(check_result_obj.links_results)
+                failed_links = [ list(el.keys())[0] for el in results["links"]["results"]
+                                         if not list(el.values())[0] ]
+                check_failed_message += "\n".join(failed_links)
 
         # overall fail ? #
         # check = False (fail) if message is non-empty #
