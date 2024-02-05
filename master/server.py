@@ -173,8 +173,12 @@ def get_check_info():
     for url_obj in not_outdated_extended:
 
         print(url_obj.base_url, "removing advanced checks", file=sys.stderr)
-        # find in list by uuid
-        target_obj_index = outdated_results.index(url_obj.uuid)
+
+        try:
+            # find in list by uuid
+            target_obj_index = outdated_results.index(url_obj.uuid)
+        except ValueError:
+            continue
 
         # set exteneded check to false in the outdated list #
         outdated_results[target_obj_index].check_links = False
